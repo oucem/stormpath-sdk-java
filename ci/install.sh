@@ -13,7 +13,7 @@ if [ -n "$BUILD_DOCS" ]; then
   fi
 
   info "Installing Sphinx..."
-  pip -q install -r requirements.txt &> $WORKDIR/target/pip.log
+  pip -q install -r ./ci/requirements.txt &> $WORKDIR/target/pip.log
   EXIT_CODE=$?
   if [ "$EXIT_CODE" -ne 0 ]; then
     error "Error installing Sphinx"

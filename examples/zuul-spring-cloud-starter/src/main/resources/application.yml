@@ -11,11 +11,3 @@ server:
 logging:
   level:
     root: INFO
-
-stormpath:
-  zuul:
-    account:
-      header:
-        jwt:
-          valueClaim:
-            enabled: false

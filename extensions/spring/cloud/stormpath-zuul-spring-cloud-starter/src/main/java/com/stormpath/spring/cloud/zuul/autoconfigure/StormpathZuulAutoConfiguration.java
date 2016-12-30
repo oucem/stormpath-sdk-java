@@ -52,6 +52,8 @@ import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
 
 import javax.crypto.spec.SecretKeySpec;
+import javax.servlet.http.HttpServletRequest;
+import javax.servlet.http.HttpServletResponse;
 import java.nio.charset.StandardCharsets;
 import java.security.Key;
 import java.util.LinkedHashMap;
@@ -102,26 +104,11 @@ public class StormpathZuulAutoConfiguration {
 
     @Bean
     @ConditionalOnMissingBean(name = "stormpathForwardedAccountMapFunction")
-    public Function<Account, Map<String, Object>> stormpathForwardedAccountMapFunction() {
-
+    public Function<Account, ?> stormpathForwardedAccountMapFunction() {
         final ResourceConverter<Account> converter = new ResourceConverter<>();
         Conversion c = accountHeader.getValue();
         converter.setConfig(c);
-
-        return new Function<Account, Map<String, Object>>() {
-            @SuppressWarnings("unchecked")
-            @Override
-            public Map<String, Object> apply(Account account) {
-
-                Object o = converter.apply(account);
-
-                String msg = "ResourceConverter implementation, given an Account, " +
-                    "did not return a Map<String,Object> as expected.";
-                Assert.isInstanceOf(Map.class, o, msg);
-
-                return (Map<String, Object>) o;
-            }
-        };
+        return converter;
     }
 
     /**
@@ -305,15 +292,28 @@ public class StormpathZuulAutoConfiguration {
     public Function<Account, String> stormpathForwardedAccountStringFunction() {
 
         final Function<Object, String> jsonFunction = stormpathJsonFunction();
-        final Function<Account, Map<String, Object>> accountFunction = stormpathForwardedAccountMapFunction();
+        final Function<Account, ?> accountFunction = stormpathForwardedAccountMapFunction();
         final Function<Map<String, ?>, String> jwtFunction = stormpathForwardedAccountJwtFunction();
         final JwtConfig jwt = accountHeader.getJwt();
 
         return new Function<Account, String>() {
             @Override
             public String apply(Account account) {
-                Map<String, Object> value = accountFunction.apply(account);
-                return jwt.isEnabled() ? jwtFunction.apply(value) : jsonFunction.apply(value);
+                Object value = accountFunction.apply(account);
+
+                if (value instanceof String) {
+                    return (String)value;
+                }
+
+                if (jwt.isEnabled()) {
+                    Assert.isInstanceOf(Map.class, value,
+                        "stormpathForwardedAccountMapFunction must return a String or Map<String,?> when using JWT.");
+                    Map<String,?> map = (Map<String,?>)value;
+                    return jwtFunction.apply(map);
+                }
+
+                //else JSON:
+                return jsonFunction.apply(value);
             }
         };
     }

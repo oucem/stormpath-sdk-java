@@ -25,6 +25,7 @@ public class ElementsConversion {
     public ElementsConversion() {
         this.name = DEFAULT_NAME;
         this.enabled = true;
+        this.each = new Conversion();
     }
 
     /**

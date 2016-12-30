@@ -8,7 +8,9 @@ import io.jsonwebtoken.Jwts;
 import io.jsonwebtoken.SignatureAlgorithm;
 
 import java.security.Key;
+import java.util.Date;
 import java.util.Map;
+import java.util.UUID;
 
 /**
  * Converts a <code>Map&lt;String,?&gt;</code> to a compact JWT string.
@@ -214,6 +216,8 @@ public class MapToJwtConverter implements Function<Map<String, ?>, String> {
                 }
             }
         }
+
+        builder.setIssuedAt(new Date());
 
         if (signatureAlgorithm != null) {
             Assert.notNull(signingKey, "Illegal state: signingKey cannot be null if signatureAlgorithm exists.");

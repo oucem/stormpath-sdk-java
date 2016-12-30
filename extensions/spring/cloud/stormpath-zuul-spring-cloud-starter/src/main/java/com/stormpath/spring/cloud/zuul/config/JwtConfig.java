@@ -1,7 +1,5 @@
 package com.stormpath.spring.cloud.zuul.config;
 
-import io.jsonwebtoken.SignatureAlgorithm;
-
 import java.util.Map;
 
 /**
@@ -16,8 +14,6 @@ public class JwtConfig {
     private Map<String, ?> claims;
 
     private String valueClaimName;
-
-    private SignatureAlgorithm signatureAlgorithm;
 
     private Map<String, ?> key;
 

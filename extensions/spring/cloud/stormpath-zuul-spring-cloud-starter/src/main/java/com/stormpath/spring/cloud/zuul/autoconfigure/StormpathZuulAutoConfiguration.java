@@ -27,14 +27,15 @@ import com.stormpath.sdk.convert.ResourceConverter;
 import com.stormpath.sdk.lang.Assert;
 import com.stormpath.sdk.lang.Collections;
 import com.stormpath.sdk.lang.Function;
-import com.stormpath.sdk.lang.Strings;
 import com.stormpath.sdk.servlet.account.AccountResolver;
 import com.stormpath.sdk.servlet.account.AccountStringResolver;
 import com.stormpath.sdk.servlet.http.Resolver;
 import com.stormpath.sdk.servlet.json.JsonFunction;
 import com.stormpath.spring.boot.autoconfigure.StormpathWebMvcAutoConfiguration;
+import com.stormpath.spring.cloud.zuul.config.JwkConfig;
 import com.stormpath.spring.cloud.zuul.config.JwtConfig;
 import com.stormpath.spring.cloud.zuul.config.StormpathZuulAccountHeaderConfig;
+import com.stormpath.spring.cloud.zuul.config.ValueClaimConfig;
 import com.stormpath.zuul.account.ForwardedAccountHeaderFilter;
 import io.jsonwebtoken.SignatureAlgorithm;
 import io.jsonwebtoken.impl.TextCodec;
@@ -137,20 +138,6 @@ public class StormpathZuulAutoConfiguration {
     /**
      * @since 1.3.0
      */
-    protected String getStringValue(Map<String, ?> map, String key) {
-        Object value = map.get(key);
-        if (value != null) {
-            String sval = String.valueOf(value);
-            if (Strings.hasText(sval)) {
-                return sval;
-            }
-        }
-        return null;
-    }
-
-    /**
-     * @since 1.3.0
-     */
     @SuppressWarnings("Duplicates")
     @Bean
     @ConditionalOnMissingBean(name = "stormpathForwardedAccountJwtFunction")
@@ -158,19 +145,15 @@ public class StormpathZuulAutoConfiguration {
 
         final JwtConfig jwt = accountHeader.getJwt();
 
-        Map<String, ?> jwk = jwt.getKey();
+        JwkConfig jwk = jwt.getKey();
+
         if (jwk == null) {
-            jwk = java.util.Collections.emptyMap();
+            jwk = new JwkConfig();
         }
 
         SignatureAlgorithm signatureAlgorithm = null;
         Key key = null;
-        boolean keyEnabled = true;
-
-        String value = getStringValue(jwk, "enabled");
-        if (value != null) {
-            keyEnabled = Boolean.parseBoolean(value);
-        }
+        boolean keyEnabled = jwk.isEnabled();
 
         Map<String, Object> baseHeader = new LinkedHashMap<>();
         if (!Collections.isEmpty(jwt.getHeader())) {
@@ -179,12 +162,12 @@ public class StormpathZuulAutoConfiguration {
 
         if (keyEnabled) {
 
-            value = getStringValue(jwk, "alg");
+            String value = jwk.getAlg();
             if (value != null) {
                 signatureAlgorithm = SignatureAlgorithm.forName(value);
             }
 
-            String kid = getStringValue(jwk, "kid");
+            String kid = jwk.getKid();
 
             key = stormpathForwardedAccountJwtSigningKey(); //check if explicitly provided as a bean
 
@@ -192,10 +175,10 @@ public class StormpathZuulAutoConfiguration {
 
                 byte[] bytes = null;
 
-                String encodedKeyBytes = getStringValue(jwk, "k");
+                String encodedKeyBytes = jwk.getK();
                 if (encodedKeyBytes != null) {
 
-                    String encoding = getStringValue(jwk, "encoding");
+                    String encoding = jwk.getEncoding();
                     if (encoding == null) {
                         //default to the JWK specification format:
                         encoding = "base64url";
@@ -277,10 +260,17 @@ public class StormpathZuulAutoConfiguration {
             }
         }
 
+        String valueClaimName = null;
+
+        ValueClaimConfig valueClaim = jwt.getValueClaim();
+        if (valueClaim != null && valueClaim.isEnabled()) {
+            valueClaimName = valueClaim.getName();
+        }
+
         return new MapToJwtConverter(
             baseHeader,
             jwt.getClaims(),
-            jwt.getValueClaimName(),
+            valueClaimName,
             signatureAlgorithm,
             key);
     }

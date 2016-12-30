@@ -34,7 +34,7 @@ If you want to specify a different header name, set the ``stormpath.zuul.account
            name: X-Forwarded-Account
 
 
-If you change this name, ensure the origin server(s) behind your gateway know to look for the new header name as well.
+If you change this name, ensure the origin server(s) behind your gateway are updated to look for the new header name as well.
 
 .. note::
 
@@ -47,14 +47,14 @@ If an ``Account`` is associated with the request, the forwarded account header v
 account.
 
 You can customize this String value to be anything you like - such as a simple single value like the Account's username
-or email, or the entire Account as a JSON document, or even a cryptographically-safe `JSON Web Token (JWT)`_ that
-represents the Account information you choose.
+or email, or the entire Account as a JSON document, or even a cryptographically-safe
+:ref:`JSON Web Token (JWT) <forwarded account header jwt>` that represents the Account information you choose.
 
-By default, a digitally-signed account `JWT`_ will be used as the header value.  When an origin server reads the forwarded
-header value, the origin server can verify the JWT's signature.  This allows the origin server to cryptographically
-guarantee the account information in the JWT has not been uknowingly changed or tampered with in transit. JWTs are
-among the simplest and safest means of secure identity assertion, so the |project| chooses this approach by default
-to help ensure best-practices security.
+By default, a digitally-signed account :ref:`JWT <forwarded account header jwt>` will be used as the header value.
+When an origin server reads the forwarded header value, the origin server can verify the JWT signature.  This allows
+the origin server to cryptographically guarantee the account information in the JWT has not been unknowingly changed or
+tampered with in transit. JWTs are among the simplest and safest means of secure identity assertion, so the
+|project| chooses this approach by default to help ensure best-practices security.
 
 If JWTs are not desirable - perhaps because you implicitly trust the network and machine transmission to your origin
 servers - you can disable the JWT approach entirely and send over a simple string value or JSON document as documented
@@ -69,8 +69,8 @@ cover account value customization first, and then finish with information on how
 Single Account Field
 ^^^^^^^^^^^^^^^^^^^^
 
-If you do not want the security guarantees of a JWT and want your header value to be a single string value, like the
-account's username or email, you can set the following configuration:
+If you do not want or need the security guarantees of a JWT and want your header value to be a single string value,
+like the account's username or email, you can set the following configuration:
 
 .. code-block:: yaml
 
@@ -85,10 +85,11 @@ account's username or email, you can set the following configuration:
              field: username
 
 
-This configuration states that JWT is disabled, and we'll use a value serialization strategy of 'single' which
-means we want the header to be a single account field value (we'll talk about serialization strategies later).  The
-account field that we want to use as the value is indicated by the ``stormpath.zuul.account.header.value.field``
-config property, which in this case is ``username``.
+This configuration states that JWT is disabled, and we'll use a value conversion strategy of ``single`` which
+means we want the header to be a single account field value (we'll talk about :ref:`JWTs <forwarded account header jwt>`
+and :ref:`conversion strategies <object conversion strategy>` later).  The account field that we want to use as the
+value is indicated by the ``stormpath.zuul.account.header.value.field`` config property, which in this case is
+``username``.
 
 With the above config, if an account with a username of ``tk421`` was associated with the request, the header sent to
 the origin server(s) would look like this:
@@ -97,30 +98,7 @@ the origin server(s) would look like this:
 
    x-forwarded-account: tk421
 
-
-Similarly, if you wanted the account's email address (e.g. ``tk421@galacticempire.com``) as the header value instead,
-you can set the following:
-
-.. code-block:: yaml
-
-   stormpath:
-     zuul:
-       account:
-         header:
-           jwt:
-             enabled: false
-           value:
-             strategy: single
-             field: email
-
-
-(notice that ``stormpath.zuul.account.header.value.field`` now equals ``email`` instead of username).  Based on this,
-origin servers would see a header that looks like this:
-
-.. code-block:: properties
-
-   x-forwarded-account: tk421@galacticempire.com
-
+A similar example using the account email instead is shown in the :ref:`field <object conversion field>` section.
 
 You can set the ``stormpath.zuul.account.header.value.field`` to a name of any scalar property defined on the
 `com.stormpath.sdk.account.Account <https://docs.stormpath.com/java/apidocs/com/stormpath/sdk/account/Account.html>`_
@@ -154,14 +132,20 @@ its graph of connected objects.  We call these rules *conversion* rules and you 
 object or collection encountered in a graph.
 
 For the purposes of the forwarded account header, the account associated with the
-request is always the 'root' of the object graph - its properties and reachable objects/collections may be also be
+request is always the 'root' of the object graph - its properties and reachable objects/collections may also be
 serialized by specifying a parallel graph of conversion rules.  The account object graph will be traversed according to
 your rules, and the resulting output will be a single JSON document that has the same graph structure as your
 specified conversion graph.
 
-So what does conversion configuration look like?  Without jumping too far ahead, here is the default Account
-conversion configuration, specified as the ``stormpath.zuul.account.header.value`` block.  This is the default
-configuration in effect if you don't specify any conversion information yourself:
+So what are the conversion rules?
+
+Before explaining each possible option in detail, let's see what the default configuration looks like and we'll
+explain what it means. Or if you prefer, you can read about
+:ref:`all the available configuration options <object graph conversion>` first, and then come back here to see
+them in context.
+
+Here is the default Account conversion configuration, specified as the ``stormpath.zuul.account.header.value`` block.
+This is the default configuration in effect if you don't specify any conversion information yourself:
 
 .. code-block:: yaml
 
@@ -182,45 +166,48 @@ configuration in effect if you don't specify any conversion information yourself
                groups:
                  strategy: defined
                  elements:
-                   name: items
                    enabled: true
+                   name: items
                    each:
                      strategy: scalars
 
 
-Now, what does this mean?  You can summarize this in English as the following:
+So what does this mean?  You can summarize this in English as the following:
 
     When converting an Account value to a JSON document, I want:
 
-       - all of the account's scalar properties to all be included, each as a JSON member.  But I still want specific
-         overriding rules for the ``href``, ``customData`` and ``groups`` *fields*.  For these:
+       - all of the account's scalar properties to be included, each as a JSON member.
 
-         - don't include the account's ``href`` field.  My origin server won't talk directly with Stormpath and won't
-           know what to do with that url, so exclude it
+       - However, I want specific overriding rules for the ``href``, ``customData`` and ``groups`` fields.  For these:
+
+         - don't include the account's ``href`` field.  My origin server(s) behind the gateway probably won't talk
+           directly with Stormpath and won't know what to do with that url, so exclude it
 
          - ``customData`` isn't a scalar, but I want it included anyway, so I'm going to define conversion rules for it
            too.  Those are:
 
-           - Include any of the customData's scalar (non object/collection) properties automatically
+           - Include any of the customData's scalar (i.e. non-object/collection) properties automatically
 
-           - However, don't include the customData's ``href``, since my origin won't know what to do with it.
+           - However, don't include the customData's ``href``, since my origin server(s) won't know what to do with it.
 
-         - ``groups`` isn't a scalar (it's a ``GroupsCollection`` object), but I want it included anyway.  However, in
-           this case I want to include *only* fields that are explicitly *defined** in its ``fields`` list.  (In this
-           case, no ``group`` ``fields`` have been specified, so no fields on the ``GroupsCollection`` object itself,
-           like 'size' and 'limit' will be included.)
+         - ``groups`` isn't a scalar (it's a ``GroupsCollection`` object), but I want it included anyway.
 
-           - However, the ``elements`` are *enabled* so I do want the elements in the collection themselves.
+           - However, in this case I want to include *only* fields that are explicitly *defined** in its ``fields``
+             list.  (In this case, even though the strategy is ``defined``, no actual ``fields`` have been specified.
+             This means that *no* fields on the ``GroupsCollection`` object itself, like 'size' and 'limit' will be
+             included.  We just want the collection's elements, described next.)
+
+           - The collection ``elements`` are enabled so I do want the elements in the collection.
 
              - When you encounter elements in the collection, I want those elements to be wrapped in a JSON object, and
                included as a JSON array with the *name* of ``items``.
 
-               - For *each* element in the ``GroupsCollection`` instance, I want you to serialize each ``Group`` object,
-                 including each group's *scalar* properties.
+             - For ``each`` element in the ``GroupsCollection`` instance, I want to serialize each ``Group`` object,
+               including each group's *scalar* properties.
 
 
 Here is an example of what the resulting JSON would look like, pretty printed for readability (to reduce the number of
-bytes transmitted over the network, the actual header value won't be pretty-printed):
+bytes transmitted over the network, the actual value won't be pretty-printed):
 
 .. code-block:: json
 
@@ -262,16 +249,18 @@ bytes transmitted over the network, the actual header value won't be pretty-prin
    }
 
 
-As you can see, the output JSON graph mirrors the conversion rules configuration graph above.
+As you can see, the output JSON graph mirrors the conversion rules graph above.
 
 Now that we've seen a good example, let's cover all the possible conversion config properties to explain their
 functionality.
 
+.. _object graph conversion:
 
 .. contents::
    :local:
    :depth: 1
 
+.. _collection conversion each:
 
 ``each``
 """"""""
@@ -284,14 +273,15 @@ convert/serialize each element in the collection.
 If you do not specify an ``each`` configuration block, default conversion rules apply for any encountered element
 object.
 
+.. _collection conversion elements:
 
 ``elements``
 """"""""""""
 
 The ``elements`` conversion property may only be specified when the object encountered is a Collection.
 
-Unlike a standard conversion block, it supports only 3 config properties:  ``name``, ``enabled`` and ``each``.  Unless
-overridden, the default ``name`` of the elements array in the rendered JSON is ``items``.
+Unlike a standard conversion block, it supports only 3 nested config properties:  ``name``, ``enabled`` and ``each``.
+Unless overridden, the default ``name`` of the elements array in the rendered JSON is ``items``.
 
 In the following example, the ``groups`` field is a collection, so it can support the ``elements`` definition
 (which in turn uses an ``each`` definition):
@@ -334,8 +324,14 @@ This would result in the following JSON (other properties omitted for brevity):
 Notice this creates a ``groups`` JSON property, which is an object, and within that object, wraps the elements in
 an ``items`` array.
 
-We typically recommend keeping this 'object wraps array' strategy - it allows for adding properties to the
-collection object itself in the future whereas raw JSON arrays cannot support this.
+.. _object wraps array:
+
+Object Wraps Array
+++++++++++++++++++
+
+We typically recommend keeping this 'object wraps array' strategy for collections - it allows for adding properties
+to the collection object itself in the future (like ``size`` or ``limit``, etc) whereas raw JSON arrays cannot
+support this.
 
 That said, what if you didn't care about potential additional collection properties in the future, and you just wanted
 the collection to be a raw JSON array?  You can use a ``strategy`` of ``list``.  For example:
@@ -374,7 +370,7 @@ This results in the following JSON (other properties omitted for brevity):
 
 Notice the resulting JSON - ``groups`` is not an object with a nested ``items`` array - it is just an array.
 
-.. note::
+.. caution::
 
    We typically strongly recommend that you *DO NOT* use the ``list`` strategy if forwards-compatibility is
    important to you - JSON arrays are inflexible and cannot support additional properties over time, whereas JSON
@@ -384,6 +380,8 @@ Notice the resulting JSON - ``groups`` is not an object with a nested ``items`` 
    that your origin servers expect.
 
 
+.. _object conversion enabled:
+
 ``enabled``
 """""""""""
 
@@ -391,6 +389,7 @@ The ``enabled`` conversion property indicates if the field will be included in t
 the value is ``false``, that field will not be included at all in the output sent to the origin server.  The default
 value is ``true``.
 
+.. _object conversion field:
 
 ``field``
 """""""""
@@ -414,13 +413,14 @@ account header":
              strategy: single
              field: email
 
-With the above config, if an account with a username of ``tk421`` was associated with the request, the header sent to
-the origin server(s) would look like this:
+With the above config, if an account with an email of ``tk421@galacticempire.com`` was associated with the request,
+the header sent to the origin server(s) would look like this:
 
 .. code-block:: properties
 
-   x-forwarded-account: tk421
+   x-forwarded-account: tk421@galacticempire.com
 
+.. _object conversion fields:
 
 ``fields``
 """"""""""
@@ -453,6 +453,8 @@ the specified ``scalars`` strategy:
 
 Don't forget that a ``fields`` map can be specified for any reachable object or collection, not just the root account
 object.
+
+.. _object conversion name:
 
 ``name``
 """"""""
@@ -499,10 +501,80 @@ named ``firstName`` and the member that would have been named ``surname`` is now
 
 If the ``name`` conversion property is unspecified, the default field name will be used.
 
+**elements name**
+
+If you specify the ``name`` conversion property as a child of an ``elements`` property, that name reflects the name
+given to the array member *within* the collection JSON object.  If you do not specify an ``elements name``, the
+default value is ``items``, resulting in the following structure:
+
+.. code-block:: javascript
+
+   {
+     // ... omitted for brevity ...
+     "groups": {
+       "items": [
+         {
+           // ... ommitted for brevity ...
+         },
+         {
+           // ... ommitted for brevity ...
+         }
+       ]
+     }
+   }
+
+Here is an example of changing a collection's ``field name`` and its ``elements name`` and the resulting JSON, so
+you can see the difference between the two:
+
+.. code-block:: yaml
+   :emphasize-lines: 8
+
+      stormpath:
+        zuul:
+          account:
+            header:
+              value:
+                fields:
+                  groups:
+                    name: my_groups
+                    elements:
+                      name: my_array
+
+This config results in the following:
+
+.. code-block:: javascript
+
+   {
+     // ... omitted for brevity ...
+     "my_groups": {
+       "my_array": [
+         {
+           // ... ommitted for brevity ...
+         },
+         {
+           // ... ommitted for brevity ...
+         }
+       ]
+     }
+   }
+
+
+See the difference?  The JSON member name of the *collection object itself* is now ``my_groups`` and the member name
+of the JSON array that contains just the elements is now ``my_array``.
+
+So in summary, a ``field name`` controls the name of the field.  If the field is a collection, the ``elements name``
+controls the name of the elements array within the field/object.
+
+Why wrap the array in an object?  Why not just have it be a simple array?  See the
+:ref:`elements <collection conversion elements>` and :ref:`Object Wraps Array <object wraps array>` sections for more
+information on backwards-compatibility safety.
+
+.. _object conversion strategy:
+
 ``strategy``
 """"""""""""
 
-The ``strategy`` conversion property specifies the *general* strategy of how to serialize an encountered
+The ``strategy`` conversion property specifies the *general* strategy of how to convert an encountered
 object or collection.  It would be burdensome to have to specify *every* *single* *field* that you want to include, so
 the ``strategy`` concept is a shortcut that allows you to define a general approach to simplify your configuration.
 
@@ -531,12 +603,13 @@ Value        Description
 
 Unless overridden for a particular/named field, ``SCALARS`` is the default strategy for all encountered objects.
 
+.. _forwarded account header jwt:
 
 Forwarded Account Header JWT
 ----------------------------
 
-By default, a digitally-signed account `JSON Web Token (JWT)`_ will be used as the header value.  When an origin
-server reads the forwarded header value, the origin server can verify the JWT's signature.  This allows the origin
+By default, a digitally-signed account `JSON Web Token (JWT)`_ will be used as the HTTP header value.  When an origin
+server reads the forwarded HTTP header value, the origin server can verify the JWT's signature.  This allows the origin
 server to cryptographically guarantee the account information in the JWT has not been uknowingly changed or tampered
 with in transit. JWTs are among the simplest and safest means of secure identity assertion, so the |project| chooses
 this approach to ensure best-in-class security by default.
@@ -574,53 +647,10 @@ This ensures the header value is *NOT* a JWT, but either an :ref:`Account JSON d
 
 By default, JWT ``enabled`` is ``true``.
 
-
-``header``
-^^^^^^^^^^
-
-If you wish, you can set default name/value pairs that should appear in the JWT's header via the
-``stormpath.zuul.account.header.jwt.header`` property.  For example:
-
-.. code-block:: yaml
-   :emphasize-lines: 6-8
-
-   stormpath:
-     zuul:
-       account:
-         header:
-           jwt:
-             header:
-               foo: bar
-               hello: world
-
-
-This configuration would result in a JWT header that, if inspected, would have a structure similar to the
-following:
-
-.. code-block:: javascript
-   :emphasize-lines: 3-4
-
-   {
-     "alg": "HS256",
-     "foo": "bar",
-     "hello": "world"
-     // ... other header fields omitted for brevity ...
-   }
-
-
-Notice that your configured default name/value pairs are in the header, in addition to other runtime-specific values.
-
-.. note::
-
-   ``stormpath.zuul.account.header.jwt.header`` name/value pairs represent JWT header *default* values.  Any specific
-   runtime-determined header value with the same name (such as ``kid`` or ``alg``) will replace (overwrite) these
-   defaults.
-
-
 ``claims``
 ^^^^^^^^^^
 
-If you wish, you can set default name/value pairs that should appear in the JWT's claims via the
+If you wish, you can set custom name/value pairs that should appear in the JWT's claims via the
 ``stormpath.zuul.account.header.jwt.claims`` property.  For example:
 
 .. code-block:: yaml
@@ -650,14 +680,54 @@ following:
    }
 
 
-Notice that your configured default name/value pairs are in the claims, in addition to other runtime-specific values.
+Notice that your configured custom name/value pairs are in the claims, in addition to other runtime-specific values.
 
 .. note::
 
    ``stormpath.zuul.account.header.jwt.claims`` name/value pairs represent JWT claims *default* values.  Any specific
-   runtime-determined claim value with the same name (such as ``iat`` or ``exp``) will replace (overwrite) these
-   defaults.
+   runtime-determined claim value with the same name (such as ``iat`` or ``exp``) will replace (overwrite) your
+   custom defaults.
 
+``header``
+^^^^^^^^^^
+
+If you wish, you can set custom name/value pairs that should appear in the JWT's header via the
+``stormpath.zuul.account.header.jwt.header`` property.  For example:
+
+.. code-block:: yaml
+   :emphasize-lines: 6-8
+
+      stormpath:
+        zuul:
+          account:
+            header:
+              jwt:
+                header:
+                  foo: bar
+                  hello: world
+
+
+   This configuration would result in a JWT header that, if inspected, would have a structure similar to the
+   following:
+
+.. code-block:: javascript
+   :emphasize-lines: 3-4
+
+      {
+        "alg": "HS256",
+        "foo": "bar",
+        "hello": "world"
+        // ... other header fields omitted for brevity ...
+      }
+
+
+   Notice that your configured custom name/value pairs are in the header, in addition to other runtime-specific values.
+
+.. note::
+
+   ``stormpath.zuul.account.header.jwt.header`` name/value pairs represent JWT header *default* values.  Any specific
+   runtime-determined header value with the same name (such as ``kid`` or ``alg``) will replace (overwrite) your
+   custom defaults.
 
 ``key``
 ^^^^^^^
@@ -694,7 +764,7 @@ You can specify which digital signature algorithm is used to sign the JWT by set
 ``stormpath.zuul.account.header.jwt.key.alg`` property to one of the following supported values:
 
 =========  ================  ==============================================
-value      Algorithm Family  Description
+Value      Algorithm Family  Description
 =========  ================  ==============================================
 ``HS256``  HMAC              HMAC using SHA-256
 ``HS384``  HMAC              HAMC using SHA-384
@@ -817,7 +887,9 @@ config property to indicate which encoding is used.
 
 .. caution::
 
-   Base64, Base64Url and UTF-8 are *not* cryptographically secure encodings.  Anyone that can access the
+   **Base64, Base64Url and UTF-8 encoding DOES NOT imply encryption**.
+
+   Anyone that can access the
    ``stormpath.zuul.account.header.jwt.key.k`` string value can use it to sign JWTs as you.  Keep this text string (and
    the configured property value) safe and secret.
 
@@ -858,7 +930,7 @@ You can specify your signing key's id (the ``kid`` param in the JWT header) by s
          header:
            jwt:
              key:
-               kid: my signing key
+               kid: my signing key id
 
 
 This will set the JWT's ``kid`` header accordingly.
@@ -874,54 +946,21 @@ Note that since it is a header, an alternative approach of accomplishing the sam
          header:
            jwt:
              header:
-               kid: my signing key
+               kid: my signing key id
 
 
 The first approach keeps the key id configuration 'close to' the other key parameters, which might be desirable
 depending on preference.  Either approach accomplishes the same thing - feel free to use what you prefer.
 
 
-``valueClaimName``
-^^^^^^^^^^^^^^^^^^
+``valueClaim``
+^^^^^^^^^^^^^^
 
-When creating the JWT, the :ref:`Account JSON <forwarded account json>` name/value pairs are added *directly* to the
-JWT claims by default.  For example:
+The ``valueClaim`` config properties allow you to control how the :ref:`Account JSON <forwarded account json>` is
+represented inside the JWT.
 
-.. code-block:: javascript
-
-   {
-     "iat": 1482972605,
-     "iss": "my gateway",
-     "aud": "my origin server",
-     "username": "tk421",
-     "email": "tk421@galacticempire.com",
-     "givenName": "TK421",
-     "middleName": null,
-     "surname": "Stormtrooper"
-     // ... any other JWT or Account claims omitted for brevity ...
-   }
-
-
-As you can see, properties from the `Account JSON <forwarded account json>` are 'peers of' (mixed directly with) JWT
-properties like ``iat``, ``iss`` and ``aud``.  They're all just 'claims' as far as JWT is concerned.
-
-However, if you want to keep the JWT properties separate from the Account properties for a little 'cleaner'
-separation of concerns, you can 'wrap' the Account JSON as a single claims property by setting the
-``stormpath.zuul.account.header.jwt.valueClaimName`` config property.
-
-For example:
-
-.. code-block:: yaml
-   :emphasize-lines: 6
-
-   stormpath:
-     zuul:
-       account:
-         header:
-           jwt:
-             valueClaimName: account
-
-This would take the entire Account JSON and set it as a single claim named ``account``:
+By default, the :ref:`Account JSON <forwarded account json>` is represented under a single JWT claim named
+``account``.  This results in JWT claims that look something like this:
 
 .. code-block:: javascript
    :emphasize-lines: 5-12
@@ -941,15 +980,21 @@ This would take the entire Account JSON and set it as a single claim named ``acc
      // ... other JWT fields omitted for brevity ...
    }
 
-As you can see, the account JSON is nested under the ``account`` claim and can be retrieved by a single lookup of that
-claim.
+
+As you can see, the account JSON is reflected as a single ``account`` claim, and the entire account can be
+retrieved by a single lookup of that claim.  This helps keep your account information 'clean' and separate from other
+JWT claims like ``iat``, ``iss``, ``aud``, etc.
+
+If you prefer, you can :ref:`change the claim name <forwarded account jwt valueclaim name>` or
+:ref:`not use a claim at all <forwarded account jwt valueclaim enabled>`
+via the respective nested ``name`` and ``enabled`` properties.
 
 .. tip::
 
-   For you JWT experts out there, you might want to know why we didn't show the account wrapped as the
-   `JWT sub claim <https://tools.ietf.org/html/rfc7519#section-4.1.2>`_ .  That is the RFC-standard claim that defines
-   the target identity of the JWT, and the account is the identity we care about, right?  So why didn't we just use
-   the ``sub`` claim in the example?
+   For you JWT experts out there, you might want to know why we didn't represent the account with the
+   `JWT sub claim <https://tools.ietf.org/html/rfc7519#section-4.1.2>`_ .  The ``sub`` claim is the RFC-standard claim
+   that defines the target identity of the JWT, and the account is the identity we care about, right?  So why didn't we
+   just use the default ``sub`` claim instead of ``account``?
 
    The reason is that the JWT RFC (`RFC 7519 <https://tools.ietf.org/html/rfc7519>`_) says that the value of the ``sub``
    claim must be a ``StringOrURI`` data type value, as defined in
@@ -958,13 +1003,96 @@ claim.
    claim name to avoid any parsing/validation errors that JWT libraries might enforce for that claim, and all is well.
 
 
+.. _forwarded account jwt valueclaim enabled:
+
+``enabled``
+"""""""""""
+
+The :ref:`Account JSON <forwarded account json>` is nested in the JWT claims as single claim named ``account`` by
+default.
+
+If you don't want to use a specific value claim at all, and instead prefer to have the account properties mixed
+together with all other JWT claims (like ``iat``, ``iss`` and ``aud``), you can disable the value claim concept
+entirely by setting ``stormpath.zuul.account.header.jwt.valueClaim.enabled`` to ``false``:
+
+.. code-block:: yaml
+
+   stormpath:
+     zuul:
+       account:
+         header:
+           jwt:
+             valueClaim:
+               enabled: false
+
+
+After setting this property to ``false``, all account JSON name/value pairs are added directly to the JWT claims,
+making each account property a claim itself.  The account properties and any other JWT-related ones are all
+intermixed and 'just claims' as far as the JWT is concerned.  For example:
+
+
+.. code-block:: javascript
+
+   {
+     "iat": 1482972605,
+     "iss": "my gateway",
+     "aud": "my origin server",
+     "username": "tk421",
+     "email": "tk421@galacticempire.com",
+     "givenName": "TK421",
+     "middleName": null,
+     "surname": "Stormtrooper"
+     // ... any other JWT or Account claims omitted for brevity ...
+   }
+
+
+.. _forwarded account jwt valueclaim name:
+
+``name``
+""""""""
+
+The single value claim is named ``account`` by default.  You can change this name if you prefer by setting the
+``stormpath.zuul.account.header.jwt.valueClaim.name`` config property.  For example:
+
+.. code-block:: yaml
+
+   stormpath:
+     zuul:
+       account:
+         header:
+           jwt:
+             valueClaim:
+               name: user
+
+This would result in JWT claims that look something like this:
+
+.. code-block:: javascript
+   :emphasize-lines: 5
+
+   {
+     "iat": 1482972605,
+     "iss": "my gateway",
+     "aud": "my origin server",
+     "user": {
+       "username": "tk421",
+       "email": "tk421@galacticempire.com",
+       "givenName": "TK421",
+       "middleName": null,
+       "surname": "Stormtrooper"
+       // ... other Account fields omitted for brevity ...
+     }
+     // ... other JWT fields omitted for brevity ...
+   }
+
+
 .. _forwarded account signing key bean:
 
 Signing Key Bean
 """"""""""""""""
 
-If you are using an RSA or Elliptic Curve private key to sign the JWT, you must provide this key by defining
-a ``stormpathForwardedAccountJwtSigningKey`` bean in your Spring configuration:
+If you are using an RSA or Elliptic Curve private key to sign the JWT, or you just prefer to specify your signing key
+as a bean, you must provide the key by defining a ``stormpathForwardedAccountJwtSigningKey`` bean in your Spring
+configuration:
 
 .. code-block:: java
 
@@ -975,8 +1103,7 @@ a ``stormpathForwardedAccountJwtSigningKey`` bean in your Spring configuration:
 
 
 You can also define this bean to provide your symmetric key for HMAC algorithms as well if you prefer not to
-configure the HMAC signing key using the ``stormpath.zuul.account.header.jwt.key.k`` or
-``stormpath.zuul.account.header.jwt.key.k`` config properties.
+configure the HMAC signing key using the ``stormpath.zuul.account.header.jwt.key.k`` config property.
 
 
 Custom Header Value
@@ -991,6 +1118,13 @@ create any string you want as the header value with a little custom code.  You h
 
 2.  If you need access to the HttpServletRequest/Response during the account-to-string conversion process, you can
     define your own :ref:`stormpathForwardedAccountHeaderValueResolver` bean.
+
+In either case you will need to add the proper bean in your gateway Spring config.
+
+.. note::
+
+   Remember that adding or changing either bean will probably require changes to your origin server(s) - the origin
+   server(s) will need to understand how to read the different Account string value created by your conversion bean.
 
 .. _forwarded account to string function:
 

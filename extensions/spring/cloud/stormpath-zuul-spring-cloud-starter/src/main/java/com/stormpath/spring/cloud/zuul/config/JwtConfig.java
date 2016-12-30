@@ -13,12 +13,13 @@ public class JwtConfig {
 
     private Map<String, ?> claims;
 
-    private String valueClaimName;
+    private ValueClaimConfig valueClaim;
 
-    private Map<String, ?> key;
+    private JwkConfig key;
 
     public JwtConfig() {
         this.enabled = true;
+        this.valueClaim = new ValueClaimConfig();
     }
 
     public boolean isEnabled() {
@@ -45,19 +46,19 @@ public class JwtConfig {
         this.claims = claims;
     }
 
-    public String getValueClaimName() {
-        return valueClaimName;
+    public ValueClaimConfig getValueClaim() {
+        return valueClaim;
     }
 
-    public void setValueClaimName(String valueClaimName) {
-        this.valueClaimName = valueClaimName;
+    public void setValueClaim(ValueClaimConfig valueClaim) {
+        this.valueClaim = valueClaim;
     }
 
-    public Map<String, ?> getKey() {
+    public JwkConfig getKey() {
         return key;
     }
 
-    public void setKey(Map<String, ?> key) {
+    public void setKey(JwkConfig key) {
         this.key = key;
     }
 }

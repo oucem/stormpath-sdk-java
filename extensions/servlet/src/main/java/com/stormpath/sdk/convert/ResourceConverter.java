@@ -1,3 +1,18 @@
+/*
+ * Copyright 2016 Stormpath, Inc.
+ *
+ * Licensed under the Apache License, Version 2.0 (the "License");
+ * you may not use this file except in compliance with the License.
+ * You may obtain a copy of the License at
+ *
+ *     http://www.apache.org/licenses/LICENSE-2.0
+ *
+ * Unless required by applicable law or agreed to in writing, software
+ * distributed under the License is distributed on an "AS IS" BASIS,
+ * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+ * See the License for the specific language governing permissions and
+ * limitations under the License.
+ */
 package com.stormpath.sdk.convert;
 
 import com.stormpath.sdk.impl.resource.AbstractResource;
@@ -30,7 +45,7 @@ public class ResourceConverter<T> implements Function<T, Object> {
 
     private static final Logger log = LoggerFactory.getLogger(ResourceConverter.class);
 
-    public static final Conversion DEFAULT_CONFIG = new Conversion()
+    public static final Conversion DEFAULT_CONFIG = Conversions
         .withField("href", Conversions.disabled())
         .withField("customData", Conversions.withField("href", Conversions.disabled()))
         .withField("groups", Conversions.withStrategy(ConversionStrategyName.DEFINED).setElements(Conversions.each(Conversions.withField("href", Conversions.disabled()))));
@@ -56,6 +71,7 @@ public class ResourceConverter<T> implements Function<T, Object> {
      * @param config the {@code Conversion} that indicates how to convert the function argument into an output value.
      */
     public void setConfig(Conversion config) {
+        Assert.notNull(config, "Conversion argument cannot be null.");
         this.config = config;
     }
 
